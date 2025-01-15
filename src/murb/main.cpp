@@ -21,6 +21,7 @@
 #include "implem/SimulationNBodyNaive.hpp"
 #include "implem/SimulationNBodyOptim.hpp"
 #include "implem/SimulationNBodyTri.hpp"
+#include "implem/SimulationNBodyMipp.hpp"
 #include "implem/SimulationNBodyOmp.hpp"
 
 /* global variables */
@@ -80,7 +81,8 @@ void argsReader(int argc, char **argv)
                      "\t\t\t - \"cpu+naive\"\n"
                      "\t\t\t - \"cpu+optim\"\n"
                      "\t\t\t - \"cpu+tri\"\n"
-                     "\t\t\t - \"cpu+omp\"\n"
+                     "\t\t\t - \"cpu+mipp\"\n"
+                      "\t\t\t - \"cpu+omp\"";
                      "\t\t\t ----";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
@@ -195,6 +197,9 @@ SimulationNBodyInterface *createImplem()
     }
     else if (ImplTag == "cpu+tri") {
         simu = new SimulationNBodyTri(NBodies, BodiesScheme, Softening);
+    }
+    else if (ImplTag == "cpu+mipp") {
+        simu = new SimulationNBodyMipp(NBodies, BodiesScheme, Softening);
     }
     else if (ImplTag == "cpu+omp") {
         simu = new SimulationNBodyOmp(NBodies, BodiesScheme, Softening);
