@@ -43,6 +43,7 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
         mipp::Reg<float> iqy(d.qy[iBody]);
         mipp::Reg<float> iqz(d.qz[iBody]);
 
+
         mipp::Reg<float> axi(0.0);
         mipp::Reg<float> ayi(0.0);
         mipp::Reg<float> azi(0.0);
@@ -51,9 +52,9 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
             // const float rijx = d[jBody].qx - d[iBody].qx; // 1 flop
             // const float rijy = d[jBody].qy - d[iBody].qy; // 1 flop
             // const float rijz = d[jBody].qz - d[iBody].qz; // 1 flop
-            mipp::Reg<float> rijx = mipp::Reg<float>(&d.qx[jBody]) - iqx;
-            mipp::Reg<float> rijy = mipp::Reg<float>(&d.qy[jBody]) - iqy;
-            mipp::Reg<float> rijz = mipp::Reg<float>(&d.qz[jBody]) - iqz;
+            mipp::Reg<float> rijx(mipp::Reg<float>(&d.qx[jBody]) - iqx);
+            mipp::Reg<float> rijy(mipp::Reg<float>(&d.qy[jBody]) - iqy);
+            mipp::Reg<float> rijz(mipp::Reg<float>(&d.qz[jBody]) - iqz);
 
             // // compute the || rij ||² distance between body i and body j
             // const float rijSquared = rijx * rijx + rijy * rijy + rijz * rijz; // 5 flops
