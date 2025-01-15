@@ -5,9 +5,9 @@
 #include <limits>
 #include <string>
 
-#include "SimulationNBodyOptim.hpp"
+#include "SimulationNBodyOmp.hpp"
 
-SimulationNBodyOptim::SimulationNBodyOptim(const unsigned long nBodies, const std::string &scheme, const float soft,
+SimulationNBodyOmp::SimulationNBodyOmp(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
     : SimulationNBodyInterface(nBodies, scheme, soft, randInit)
 {
@@ -15,7 +15,7 @@ SimulationNBodyOptim::SimulationNBodyOptim(const unsigned long nBodies, const st
     this->accelerations.resize(this->getBodies().getN());
 }
 
-void SimulationNBodyOptim::initIteration()
+void SimulationNBodyOmp::initIteration()
 {
     for (unsigned long iBody = 0; iBody < this->getBodies().getN(); iBody++) {
         this->accelerations[iBody].ax = 0.f;
@@ -24,7 +24,7 @@ void SimulationNBodyOptim::initIteration()
     }
 }
 
-void SimulationNBodyOptim::computeBodiesAcceleration()
+void SimulationNBodyOmp::computeBodiesAcceleration()
 {
     const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
 
@@ -33,8 +33,10 @@ void SimulationNBodyOptim::computeBodiesAcceleration()
     const unsigned N = this->getBodies().getN();
 
     // flops = n² * 20
+    #pragma omp parallel for
     for (unsigned long iBody = 0; iBody < N; iBody++) {
         // flops = n * 20
+        #pragma omp simd
         for (unsigned long jBody = 0; jBody < N; jBody++) {
             const float rijx = d[jBody].qx - d[iBody].qx; // 1 flop
             const float rijy = d[jBody].qy - d[iBody].qy; // 1 flop
@@ -55,7 +57,7 @@ void SimulationNBodyOptim::computeBodiesAcceleration()
     }
 }
 
-void SimulationNBodyOptim::computeOneIteration()
+void SimulationNBodyOmp::computeOneIteration()
 {
     this->initIteration();
     this->computeBodiesAcceleration();

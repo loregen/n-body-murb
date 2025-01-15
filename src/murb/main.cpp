@@ -21,6 +21,7 @@
 #include "implem/SimulationNBodyNaive.hpp"
 #include "implem/SimulationNBodyOptim.hpp"
 #include "implem/SimulationNBodyTri.hpp"
+#include "implem/SimulationNBodyOmp.hpp"
 
 /* global variables */
 unsigned long NBodies;               /*!< Number of bodies. */
@@ -79,6 +80,7 @@ void argsReader(int argc, char **argv)
                      "\t\t\t - \"cpu+naive\"\n"
                      "\t\t\t - \"cpu+optim\"\n"
                      "\t\t\t - \"cpu+tri\"\n"
+                     "\t\t\t - \"cpu+omp\"\n"
                      "\t\t\t ----";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
@@ -193,6 +195,9 @@ SimulationNBodyInterface *createImplem()
     }
     else if (ImplTag == "cpu+tri") {
         simu = new SimulationNBodyTri(NBodies, BodiesScheme, Softening);
+    }
+    else if (ImplTag == "cpu+omp") {
+        simu = new SimulationNBodyOmp(NBodies, BodiesScheme, Softening);
     }
     else {
         std::cout << "Implementation '" << ImplTag << "' does not exist... Exiting." << std::endl;
