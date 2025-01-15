@@ -83,7 +83,6 @@ void argsReader(int argc, char **argv)
                      "\t\t\t - \"cpu+tri\"\n"
                      "\t\t\t - \"cpu+mipp\"\n"
                       "\t\t\t - \"cpu+omp\"";
-                     "\t\t\t ----";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
 #ifdef USE_OCL
