@@ -68,7 +68,7 @@ namespace cuda
         float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
         float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
 
-        float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+        float ai = G * otherBody.w / (rijSquared * sqrt(rijSquared));
 
         acc.x += ai * rij.x;
         acc.y += ai * rij.y;
@@ -129,10 +129,27 @@ void SimulationNBodyCuda::initIteration()
     }
 }
 
+typedef struct myAos
+{
+    float x;
+    float y;
+    float z;
+    float w;
+} myAos;
+
 void SimulationNBodyCuda::computeBodiesAcceleration()
 {
     const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
     const unsigned long n = this->getBodies().getN();
+
+    std::vector<myAos> d_new(n);
+    for(unsigned long i = 0; i < n; i++)
+    {
+        d_new[i].x = d[i].qx;
+        d_new[i].y = d[i].qy;
+        d_new[i].z = d[i].qz;
+        d_new[i].w = d[i].m;
+    }
 
     // device pointers
     void *d_AoS;
@@ -143,7 +160,8 @@ void SimulationNBodyCuda::computeBodiesAcceleration()
     cudaMalloc(&d_acc, 3 * n * sizeof(float));
 
     //copy body data on device
-    cudaMemcpy(d_AoS, d.data(), 4 * n * sizeof(float), cudaMemcpyHostToDevice);
+    // cudaMemcpy(d_AoS, d.data(), 4 * n * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_AoS, d_new.data(), 4 * n * sizeof(float), cudaMemcpyHostToDevice);
 
     int numBlocks = (n + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
 
