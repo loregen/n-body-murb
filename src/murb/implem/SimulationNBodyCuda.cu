@@ -56,7 +56,8 @@ namespace cuda
     float3 acc = {0.f, 0.f, 0.f};
 
     unsigned tileIdx;
-    for(unsigned tile = 0; tile < nBodies / THREADS_PER_BLK; tile++)
+    unsigned tile; 
+    for(tile = 0; tile < nBodies / THREADS_PER_BLK; tile++)
     {
       tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
 
@@ -77,7 +78,7 @@ namespace cuda
       __syncthreads();
     }
 
-    tileIdx += THREADS_PER_BLK;
+    tileIdx = tile * THREADS_PER_BLK  + threadIdx.x;
     // epilogue
     if(tileIdx < nBodies)
     {
@@ -107,6 +108,7 @@ namespace cuda
   }
 
 }
+
 
 SimulationNBodyCuda::SimulationNBodyCuda(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
@@ -143,6 +145,7 @@ void SimulationNBodyCuda::computeBodiesAcceleration()
     const unsigned long n = this->getBodies().getN();
 
     std::vector<myAos> d_new(n);
+    #pragma omp parallel for 
     for(unsigned long i = 0; i < n; i++)
     {
         d_new[i].x = d[i].qx;
