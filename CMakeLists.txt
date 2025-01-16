@@ -41,6 +41,7 @@ if (ENABLE_MURB_CUDA)
     include(CheckLanguage)
     check_language(CUDA)
     enable_language(CUDA)
+    set(CMAKE_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures to compile for")
     include_directories(${CUDA_INCLUDE_DIRS})
     if (NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD 11)
@@ -182,3 +183,30 @@ if ((ENABLE_MURB_CUDA) AND (ENABLE_MURB))
     targets_compile_definitions("${murb_targets_list}" PRIVATE USE_CUDA)
 endif ()
 
+# Force compilation in Debug mode
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif ()
+
+message(STATUS "Building in ${CMAKE_BUILD_TYPE} mode")
+
+# Ensure CUDA debug flags are set if CUDA is enabled
+if (ENABLE_MURB_CUDA)
+    set(CUDA_SEPARABLE_COMPILATION ON)
+    set(CUDA_PROPAGATE_HOST_FLAGS OFF) # Prevents host compiler flags from overriding CUDA flags
+    if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11)
+        set(CUDA_NVCC_FLAGS_DEBUG "-G -lineinfo") # Add debug info for CUDA
+    else ()
+        set(CUDA_NVCC_FLAGS_DEBUG "-G") # Debug info for older CUDA versions
+    endif ()
+
+    # Apply flags specifically for debug builds
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        list(APPEND CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS_DEBUG})
+    endif ()
+
+    # Add CUDA flags to the target
+    set_target_properties(murb-bin PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    set_target_properties(murb-bin PROPERTIES CUDA_ARCHITECTURES "native")
+    target_compile_options(murb-bin PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${CUDA_NVCC_FLAGS}>)
+endif ()
