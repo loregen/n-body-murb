@@ -23,8 +23,9 @@
 #include "implem/SimulationNBodyTri.hpp"
 #include "implem/SimulationNBodyMipp.hpp"
 #include "implem/SimulationNBodyOmp.hpp"
-#include "implem/SimulationNBodyCuda.cuh"
+#include "implem/SimulationNBodyCudaAoS.cuh"
 #include "implem/SimulationNBodyLoop.hpp"
+#include "implem/SimulationNBodyCudaSoA.cuh"
 
 /* global variables */
 unsigned long NBodies;               /*!< Number of bodies. */
@@ -85,8 +86,9 @@ void argsReader(int argc, char **argv)
                      "\t\t\t - \"cpu+tri\"\n"
                      "\t\t\t - \"cpu+mipp\"\n"
                       "\t\t\t - \"cpu+omp\""
-                      "\t\t\t - \"cpu+cuda\""
-                      "\t\t\t - \"cpu+loop\"";
+                      "\t\t\t - \"cuda+AoS\""
+                      "\t\t\t - \"cpu+loop\""
+                      "\t\t\t - \"cuda+SoA\"";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
 #ifdef USE_OCL
@@ -210,8 +212,11 @@ SimulationNBodyInterface *createImplem()
     else if (ImplTag == "cpu+loop") {
         simu = new SimulationNBodyLoop(NBodies, BodiesScheme, Softening);
     }
-    else if (ImplTag == "cpu+cuda") {
-        simu = new SimulationNBodyCuda(NBodies, BodiesScheme, Softening);
+    else if (ImplTag == "cuda+AoS") {
+        simu = new SimulationNBodyCudaAoS(NBodies, BodiesScheme, Softening);
+    }
+    else if (ImplTag == "cuda+SoA") {
+        simu = new SimulationNBodyCudaSoA(NBodies, BodiesScheme, Softening);
     }
     else {
         std::cout << "Implementation '" << ImplTag << "' does not exist... Exiting." << std::endl;

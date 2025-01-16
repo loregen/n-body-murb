@@ -5,10 +5,10 @@
 #include <limits>
 #include <string>
 
-#include "SimulationNBodyCuda.cuh"
+#include "SimulationNBodyCudaAoS.cuh"
 
 #define MAX_SHARED_PER_BLOCK 48000
-#define THREADS_PER_BLK 1024
+#define THREADS_PER_BLK 512
 
 namespace cuda
 {
@@ -40,18 +40,15 @@ namespace cuda
     }
   }
 
-  __global__ void computeBodiesAccell_k(void *d_AoS, void *d_acc, const unsigned long nBodies, const float softSquared, const float G)
+  __global__ void computeBodiesAccellAoS_k(float4 *d_AoS, float3 *d_acc, const unsigned long nBodies, const float softSquared, const float G)
   {
     __shared__ float4 shared_mem[THREADS_PER_BLK];
-    float4 *global_AoS = (float4 *)d_AoS;
-    float3 *global_acc = (float3 *)d_acc;
-    
+
     const unsigned long iBody = blockIdx.x * blockDim.x + threadIdx.x;
-    
     float4 myBody;
     if(iBody < nBodies)
     {
-      myBody = global_AoS[iBody];
+      myBody = d_AoS[iBody];
     }
     float3 acc = {0.f, 0.f, 0.f};
 
@@ -61,32 +58,10 @@ namespace cuda
     {
       tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
 
-      shared_mem[threadIdx.x] = global_AoS[tileIdx];
+      shared_mem[threadIdx.x] = d_AoS[tileIdx];
       __syncthreads();
+      #pragma unroll 4
       for(unsigned jBody = 0; jBody < THREADS_PER_BLK; jBody++)
-      {
-        float4 otherBody = shared_mem[jBody];
-        float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
-        float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
-
-        float ai = G * otherBody.w / (rijSquared * sqrt(rijSquared));
-
-        acc.x += ai * rij.x;
-        acc.y += ai * rij.y;
-        acc.z += ai * rij.z;
-      }
-      __syncthreads();
-    }
-
-    tileIdx = tile * THREADS_PER_BLK  + threadIdx.x;
-    // epilogue
-    if(tileIdx < nBodies)
-    {
-      //load the last tile
-      shared_mem[threadIdx.x] = global_AoS[tileIdx];
-      __syncthreads();
-
-      for(unsigned jBody = 0; jBody < nBodies % THREADS_PER_BLK; jBody++)
       {
         float4 otherBody = shared_mem[jBody];
         float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
@@ -98,11 +73,31 @@ namespace cuda
         acc.y += ai * rij.y;
         acc.z += ai * rij.z;
       }
+      __syncthreads();
+    }
+    tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
+
+
+    //load the last tile
+    shared_mem[threadIdx.x] = (tileIdx < nBodies) ? d_AoS[tileIdx] : make_float4(0.f, 0.f, 0.f, 0.f);
+    __syncthreads();
+
+    for(unsigned jBody = 0; jBody < nBodies % THREADS_PER_BLK; jBody++)
+    {
+      float4 otherBody = shared_mem[jBody];
+      float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
+      float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
+
+      float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+
+      acc.x += ai * rij.x;
+      acc.y += ai * rij.y;
+      acc.z += ai * rij.z;
     }
 
     if(iBody < nBodies)
     {
-      global_acc[iBody] = acc;
+      d_acc[iBody] = acc;
     }
 
   }
@@ -110,7 +105,7 @@ namespace cuda
 }
 
 
-SimulationNBodyCuda::SimulationNBodyCuda(const unsigned long nBodies, const std::string &scheme, const float soft,
+SimulationNBodyCudaAoS::SimulationNBodyCudaAoS(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
     : SimulationNBodyInterface(nBodies, scheme, soft, randInit)
 {
@@ -122,7 +117,7 @@ SimulationNBodyCuda::SimulationNBodyCuda(const unsigned long nBodies, const std:
 
 }
 
-void SimulationNBodyCuda::initIteration()
+void SimulationNBodyCudaAoS::initIteration()
 {
     for (unsigned long iBody = 0; iBody < this->getBodies().getN(); iBody++) {
         this->accelerations[iBody].ax = 0.f;
@@ -131,20 +126,12 @@ void SimulationNBodyCuda::initIteration()
     }
 }
 
-typedef struct myAos
-{
-    float x;
-    float y;
-    float z;
-    float w;
-} myAos;
-
-void SimulationNBodyCuda::computeBodiesAcceleration()
+void SimulationNBodyCudaAoS::computeBodiesAcceleration()
 {
     const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
     const unsigned long n = this->getBodies().getN();
 
-    std::vector<myAos> d_new(n);
+    std::vector<float4> d_new(n);
     #pragma omp parallel for 
     for(unsigned long i = 0; i < n; i++)
     {
@@ -155,30 +142,30 @@ void SimulationNBodyCuda::computeBodiesAcceleration()
     }
 
     // device pointers
-    void *d_AoS;
-    void *d_acc;
+    float4 *d_AoS;
+    float3 *d_acc;
 
     // allocate memory on the device
-    cudaMalloc(&d_AoS, 4 * n * sizeof(float));
-    cudaMalloc(&d_acc, 3 * n * sizeof(float));
+    cudaMalloc(&d_AoS, n * sizeof(float4));
+    cudaMalloc(&d_acc, n * sizeof(float3));
 
     //copy body data on device
     // cudaMemcpy(d_AoS, d.data(), 4 * n * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_AoS, d_new.data(), 4 * n * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_AoS, d_new.data(), n * sizeof(float4), cudaMemcpyHostToDevice);
 
     int numBlocks = (n + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
 
-    cuda::computeBodiesAccell_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, n, this->soft * this->soft, this->G);
+    cuda::computeBodiesAccellAoS_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, n, this->soft * this->soft, this->G);
 
     //copy back the result
-    cudaMemcpy(this->accelerations.data(), d_acc, 3 * n * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(this->accelerations.data(), d_acc, n * sizeof(float3), cudaMemcpyDeviceToHost);
 
     //free memory
     cudaFree(d_AoS);
     cudaFree(d_acc);
 }
 
-void SimulationNBodyCuda::computeOneIteration()
+void SimulationNBodyCudaAoS::computeOneIteration()
 {
     this->initIteration();
     this->computeBodiesAcceleration();

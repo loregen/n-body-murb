@@ -1,18 +1,18 @@
-#ifndef SIMULATION_N_BODY_CUDA_CUH
-#define SIMULATION_N_BODY_CUDA_CUH
+#ifndef SIMULATION_N_BODY_CUDA_SOA_CUH
+#define SIMULATION_N_BODY_CUDA_SOA_CUH
 
 #include <string>
 
 #include "core/SimulationNBodyInterface.hpp"
 
-class SimulationNBodyCuda : public SimulationNBodyInterface {
+class SimulationNBodyCudaSoA : public SimulationNBodyInterface {
   protected:
     std::vector<accAoS_t<float>> accelerations; /*!< Array of body acceleration structures. */
 
   public:
-    SimulationNBodyCuda(const unsigned long nBodies, const std::string &scheme = "galaxy", const float soft = 0.035f,
+    SimulationNBodyCudaSoA(const unsigned long nBodies, const std::string &scheme = "galaxy", const float soft = 0.035f,
                          const unsigned long randInit = 0);
-    virtual ~SimulationNBodyCuda() = default;
+    virtual ~SimulationNBodyCudaSoA() = default;
     virtual void computeOneIteration();
 
   protected:
@@ -20,4 +20,4 @@ class SimulationNBodyCuda : public SimulationNBodyInterface {
     void computeBodiesAcceleration();
 };
 
-#endif /* SIMULATION_N_BODY_CUDA_CUH */
+#endif /* SIMULATION_N_BODY_CUDA_SOA_CUH */

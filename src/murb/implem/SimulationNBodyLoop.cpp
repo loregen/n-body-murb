@@ -7,7 +7,7 @@
 
 #include "SimulationNBodyLoop.hpp"
 
-constexpr unsigned UNROLL_FACTOR = 2; 
+constexpr unsigned UNROLL_FACTOR = 4; 
 
 SimulationNBodyLoop::SimulationNBodyLoop(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
@@ -29,7 +29,7 @@ void SimulationNBodyLoop::initIteration()
 void SimulationNBodyLoop::computeBodiesAcceleration()
 {
     // Runtime validation for UNROLL_FACTOR
-    assert(UNROLL_FACTOR <= 2 && "UNROLL_FACTOR must be <= 2");
+    assert(UNROLL_FACTOR <= 4 && "UNROLL_FACTOR must be <= 4");
 
     const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
     const float softSquared = this->soft * this->soft; // 1 flop
@@ -60,6 +60,86 @@ void SimulationNBodyLoop::computeBodiesAcceleration()
                 this->accelerations[iBody].ax += ai * rijx;
                 this->accelerations[iBody].ay += ai * rijy;
                 this->accelerations[iBody].az += ai * rijz;
+
+                rijx = d[jBody + 2].qx - d[iBody].qx;
+                rijy = d[jBody + 2].qy - d[iBody].qy;
+                rijz = d[jBody + 2].qz - d[iBody].qz;
+                rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                ai = this->G * d[jBody + 2].m /
+                                 ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                this->accelerations[iBody].ax += ai * rijx;
+                this->accelerations[iBody].ay += ai * rijy;
+                this->accelerations[iBody].az += ai * rijz;
+
+                rijx = d[jBody + 3].qx - d[iBody].qx;
+                rijy = d[jBody + 3].qy - d[iBody].qy;
+                rijz = d[jBody + 3].qz - d[iBody].qz;
+                rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                ai = this->G * d[jBody + 3].m /
+                                 ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                this->accelerations[iBody].ax += ai * rijx;
+                this->accelerations[iBody].ay += ai * rijy;
+                this->accelerations[iBody].az += ai * rijz;
+                
+                // rijx = d[jBody + 4].qx - d[iBody].qx;
+                // rijy = d[jBody + 4].qy - d[iBody].qy;
+                // rijz = d[jBody + 4].qz - d[iBody].qz;
+                // rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                // ai = this->G * d[jBody + 4].m /
+                //                  ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                // this->accelerations[iBody].ax += ai * rijx;
+                // this->accelerations[iBody].ay += ai * rijy;
+                // this->accelerations[iBody].az += ai * rijz;
+
+                // rijx = d[jBody + 5].qx - d[iBody].qx;
+                // rijy = d[jBody + 5].qy - d[iBody].qy;
+                // rijz = d[jBody + 5].qz - d[iBody].qz;
+                // rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                // ai = this->G * d[jBody + 5].m /
+                //                  ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                // this->accelerations[iBody].ax += ai * rijx;
+                // this->accelerations[iBody].ay += ai * rijy;
+                // this->accelerations[iBody].az += ai * rijz;
+
+                // rijx = d[jBody + 6].qx - d[iBody].qx;
+                // rijy = d[jBody + 6].qy - d[iBody].qy;
+                // rijz = d[jBody + 6].qz - d[iBody].qz;
+                // rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                // ai = this->G * d[jBody + 6].m /
+                //                  ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                // this->accelerations[iBody].ax += ai * rijx;
+                // this->accelerations[iBody].ay += ai * rijy;
+                // this->accelerations[iBody].az += ai * rijz;
+
+                // rijx = d[jBody + 7].qx - d[iBody].qx;
+                // rijy = d[jBody + 7].qy - d[iBody].qy;
+                // rijz = d[jBody + 7].qz - d[iBody].qz;
+                // rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                // ai = this->G * d[jBody + 7].m /
+                //                  ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                // this->accelerations[iBody].ax += ai * rijx;
+                // this->accelerations[iBody].ay += ai * rijy;
+                // this->accelerations[iBody].az += ai * rijz;
+
+                // rijx = d[jBody + 8].qx - d[iBody].qx;
+                // rijy = d[jBody + 8].qy - d[iBody].qy;
+                // rijz = d[jBody + 8].qz - d[iBody].qz;
+                // rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                // ai = this->G * d[jBody + 8].m /
+                //                  ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                // this->accelerations[iBody].ax += ai * rijx;
+                // this->accelerations[iBody].ay += ai * rijy;
+                // this->accelerations[iBody].az += ai * rijz;
+
+                // rijx = d[jBody + 9].qx - d[iBody].qx;
+                // rijy = d[jBody + 9].qy - d[iBody].qy;
+                // rijz = d[jBody + 9].qz - d[iBody].qz;
+                // rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+                // ai = this->G * d[jBody + 9].m /
+                //                  ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared));
+                // this->accelerations[iBody].ax += ai * rijx;
+                // this->accelerations[iBody].ay += ai * rijy;
+                // this->accelerations[iBody].az += ai * rijz;
             }
 
         // Remainder loop
