@@ -10,6 +10,9 @@
 #define MAX_SHARED_PER_BLOCK 48000
 #define THREADS_PER_BLK 512
 
+__constant__ float d_G;
+__constant__ float d_softSquared;
+
 namespace cuda
 {
   __global__ void computeBodiesAccellSoA_k(float *d_data, float3 *d_acc, const unsigned long nBodies, const float softSquared, const float G)
@@ -25,11 +28,7 @@ namespace cuda
     float4 myBody;
     if(iBody < nBodies)
     {
-      // myBody = make_float4(d_x[iBody], d_y[iBody], d_z[iBody], d_mass[iBody]);
-      myBody.x = d_x[iBody];
-      myBody.y = d_y[iBody];
-      myBody.z = d_z[iBody];
-      myBody.w = d_mass[iBody];
+      myBody = make_float4(d_x[iBody], d_y[iBody], d_z[iBody], d_mass[iBody]);
     }
     float3 acc = make_float3(0.f, 0.f, 0.f);
 
@@ -39,11 +38,7 @@ namespace cuda
     {
       tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
 
-      //shared_mem[threadIdx.x] = make_float4(d_x[tileIdx], d_y[tileIdx], d_z[tileIdx], d_mass[tileIdx]);
-      shared_mem[threadIdx.x].x = d_x[tileIdx];
-      shared_mem[threadIdx.x].y = d_y[tileIdx];
-      shared_mem[threadIdx.x].z = d_z[tileIdx];
-      shared_mem[threadIdx.x].w = d_mass[tileIdx];
+      shared_mem[threadIdx.x] = make_float4(d_x[tileIdx], d_y[tileIdx], d_z[tileIdx], d_mass[tileIdx]);
       __syncthreads();
       #pragma unroll 8
       for(unsigned jBody = 0; jBody < THREADS_PER_BLK; jBody++)
