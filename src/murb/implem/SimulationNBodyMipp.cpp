@@ -19,6 +19,7 @@ SimulationNBodyMipp::SimulationNBodyMipp(const unsigned long nBodies, const std:
 
 void SimulationNBodyMipp::initIteration()
 {
+    #pragma omp parallel for
     for (unsigned long iBody = 0; iBody < this->getBodies().getN(); iBody++) {
         this->accelerations[iBody].ax = 0.f;
         this->accelerations[iBody].ay = 0.f;
