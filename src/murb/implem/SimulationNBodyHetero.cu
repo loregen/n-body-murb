@@ -7,23 +7,27 @@
 #include <chrono>
 
 #include "SimulationNBodyHetero.cuh"
-#include "mippEpilogue.hpp"
 
+//CUDA parameters
+#define THREADS_PER_BLK 512
 #define MAX_SHARED_PER_BLOCK 48000
-
+#define NUM_BLOCKS_CPU 7
 
 namespace cuda
 {
-  __global__ void computeBodiesAccellHetero_k(float4 *d_AoS, float3 *d_acc, const unsigned long nBodies, const float softSquared, const float G)
+
+  __constant__ float d_G;
+  __constant__ float d_softSquared;
+
+  __global__ void computeBodiesAccellHetero_k(float4 *d_AoS, float3 *d_acc, const unsigned long nBodies)
   {
     __shared__ float4 shared_mem[THREADS_PER_BLK];
-
     const unsigned long iBody = blockIdx.x * blockDim.x + threadIdx.x;
-    float4 myBody;
-    if(iBody < nBodies)
-    {
-      myBody = d_AoS[iBody];
-    }
+
+    //read the body data from the global memory
+    float4 myBody = d_AoS[iBody];
+
+    //initialize the acceleration
     float3 acc = {0.f, 0.f, 0.f};
 
     unsigned tileIdx;
@@ -39,9 +43,9 @@ namespace cuda
       {
         float4 otherBody = shared_mem[jBody];
         float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
-        float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
+        float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + d_softSquared;
 
-        float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+        float ai = d_G * otherBody.w / (rijSquared * sqrtf(rijSquared));
 
         acc.x += ai * rij.x;
         acc.y += ai * rij.y;
@@ -49,46 +53,32 @@ namespace cuda
       }
       __syncthreads();
     }
-    // tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
 
+    tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
 
-    // //load the last tile
-    // shared_mem[threadIdx.x] = (tileIdx < nBodies) ? d_AoS[tileIdx] : make_float4(0.f, 0.f, 0.f, 0.f);
-    // __syncthreads();
+    //load the last tile
+    shared_mem[threadIdx.x] = (tileIdx < nBodies) ? d_AoS[tileIdx] : make_float4(0.f, 0.f, 0.f, 0.f);
+    __syncthreads();
 
-    // for(unsigned jBody = 0; jBody < nBodies % THREADS_PER_BLK; jBody++)
-    // {
-    //   float4 otherBody = shared_mem[jBody];
-    //   float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
-    //   float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
-
-    //   float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
-
-    //   acc.x += ai * rij.x;
-    //   acc.y += ai * rij.y;
-    //   acc.z += ai * rij.z;
-    // }
-
-    if(iBody < nBodies)
+    for(unsigned jBody = 0; jBody < nBodies % THREADS_PER_BLK; jBody++)
     {
-      d_acc[iBody] = acc;
+      float4 otherBody = shared_mem[jBody];
+      float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
+      float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + d_softSquared;
+
+      float ai = d_G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+
+      acc.x += ai * rij.x;
+      acc.y += ai * rij.y;
+      acc.z += ai * rij.z;
     }
 
-  }
+    //store the result in the global memory
+    d_acc[iBody] = acc;
 
-  __global__ void sumAccell_k(float3 *d_acc, float3 *d_acc_cpu, const unsigned long nBodies)
-  {
-    const unsigned long iBody = blockIdx.x * blockDim.x + threadIdx.x;
-    if(iBody < nBodies)
-    {
-      d_acc_cpu[iBody].x += d_acc[iBody].x;
-      d_acc_cpu[iBody].y += d_acc[iBody].y;
-      d_acc_cpu[iBody].z += d_acc[iBody].z;
-    }
   }
 
 }
-
 
 SimulationNBodyHetero::SimulationNBodyHetero(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
@@ -97,6 +87,31 @@ SimulationNBodyHetero::SimulationNBodyHetero(const unsigned long nBodies, const 
     this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
     this->accelerations.resize(this->getBodies().getN());
 
+    unsigned nFullBlocks = nBodies / THREADS_PER_BLK;
+    if(nFullBlocks >= NUM_BLOCKS_CPU)
+    {
+      numBlocks = nFullBlocks - NUM_BLOCKS_CPU;
+    }
+    else
+    {
+      std::cout << "Running only epilogue on CPU" << std::endl;
+      numBlocks = nFullBlocks;
+    }
+    nBodiesGpu = numBlocks * THREADS_PER_BLK;
+    if(nBodiesGpu == 0)
+    {
+      std::cout << "Not enough bodies to run on GPU" << std::endl;
+    }
+
+    cudaHostAlloc(&h_AoS_4, nBodies * sizeof(float4), cudaHostAllocDefault);
+
+    cudaMalloc(&d_AoS, nBodies * sizeof(float4));
+    cudaMalloc(&d_acc, nBodiesGpu * sizeof(float3));
+
+    //copy the constant memory
+    cudaMemcpyToSymbol(cuda::d_G, &G, sizeof(float));
+    const float softSquared = soft * soft;
+    cudaMemcpyToSymbol(cuda::d_softSquared, &softSquared, sizeof(float));
 }
 
 void SimulationNBodyHetero::initIteration()
@@ -110,47 +125,29 @@ void SimulationNBodyHetero::initIteration()
 
 void SimulationNBodyHetero::computeBodiesAcceleration()
 {
-    const std::vector<dataAoS_t<float>> &h_AoS = this->getBodies().getDataAoS();
+    const std::vector<dataAoS_t<float>> &h_AoS_8 = this->getBodies().getDataAoS();
     const dataSoA_t<float> &h_SoA = this->getBodies().getDataSoA();
-    const unsigned long numBodies = this->getBodies().getN();
+    const unsigned long nBodies = this->getBodies().getN();
 
-    const unsigned numFullTiles = numBodies / THREADS_PER_BLK;
+    //const unsigned numFullTiles = nBodies / THREADS_PER_BLK;
 
-    std::vector<float4> d_new(numBodies);
     #pragma omp parallel for
-    for(unsigned i = 0; i < numBodies; i++)
+    for(unsigned i = 0; i < nBodies; i++)
     {
-        d_new[i] = make_float4(h_AoS[i].qx, h_AoS[i].qy, h_AoS[i].qz, h_AoS[i].m);
+      ((float4*)h_AoS_4)[i] = make_float4(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz, h_AoS_8[i].m);
     }
 
-    // device pointers
-    float4 *d_AoS;
-    float3 *d_acc;
-
-    // allocate memory on the device
-    cudaMalloc(&d_AoS, numBodies * sizeof(float4));
-    cudaMalloc(&d_acc, numBodies * sizeof(float3));
-
     //copy body data on device
-    cudaMemcpy(d_AoS, d_new.data(), numBodies * sizeof(float4), cudaMemcpyHostToDevice);
-
-    // cudaEvent_t beforeKernel, afterCpuEpilogue, afterKernel;
-    // cudaEventCreate(&beforeKernel);
-    // cudaEventCreate(&afterCpuEpilogue);
-    // cudaEventCreate(&afterKernel);
-
-    // // Record start time
-    // cudaEventRecord(beforeKernel);
-
-
+    cudaMemcpy(d_AoS, h_AoS_4, nBodies * sizeof(float4), cudaMemcpyHostToDevice);
 
     // Launch GPU kernel (non-blocking)
-    int numBlocks = (numBodies + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
     //auto beforeKernel = std::chrono::high_resolution_clock::now();
-    cuda::computeBodiesAccellHetero_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, numBodies, soft * soft, G);
-
+    if(numBlocks > 0)
+    {
+      cuda::computeBodiesAccellHetero_k<<<numBlocks, THREADS_PER_BLK>>>((float4*)d_AoS, (float3*)d_acc, nBodies);
+    }
     // Do CPU work
-    compute_epilogue_mipp(numBodies, h_SoA, accelerations, G, soft * soft, numFullTiles * THREADS_PER_BLK);
+    computeEpilogueMipp();
 
     // auto afterCpuEpilogue = std::chrono::high_resolution_clock::now();
 
@@ -175,19 +172,8 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
     // std::cout << "CPU Work duration: " << cpuDuration << " ms\n";
     // std::cout << "CPU waited for: " << gpuWaitDuration << " ms\n";
 
-    // copy the cpu acc to the gpu
-    float3 *d_acc_cpu = (float3*)d_AoS;
-    cudaMemcpy(d_acc_cpu, this->accelerations.data(), numBodies * sizeof(float3), cudaMemcpyHostToDevice);
-
-    // sum the cpu and gpu acc
-    cuda::sumAccell_k<<<numBlocks, THREADS_PER_BLK>>>(d_acc, d_acc_cpu, numBodies);
-
-    // copy back the result
-    cudaMemcpy(this->accelerations.data(), d_acc_cpu, numBodies * sizeof(float3), cudaMemcpyDeviceToHost);
-
-    //free memory
-    cudaFree(d_AoS);
-    cudaFree(d_acc);
+    //copy 
+    cudaMemcpy(this->accelerations.data(), d_acc, nBodiesGpu * sizeof(float3), cudaMemcpyDeviceToHost);
 }
 
 void SimulationNBodyHetero::computeOneIteration()
@@ -196,4 +182,13 @@ void SimulationNBodyHetero::computeOneIteration()
     this->computeBodiesAcceleration();
     // time integration
     this->bodies.updatePositionsAndVelocities(this->accelerations, this->dt);
+}
+
+SimulationNBodyHetero::~SimulationNBodyHetero()
+{
+    //free memory
+    cudaFree(d_AoS);
+    cudaFree(d_acc);
+
+    cudaFreeHost(h_AoS_4);
 }

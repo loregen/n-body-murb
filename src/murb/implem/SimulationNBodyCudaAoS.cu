@@ -58,7 +58,6 @@ namespace cuda
     for(tile = 0; tile < nBodies / THREADS_PER_BLK; tile++)
     {
       tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
-
       shared_mem[threadIdx.x] = d_AoS[tileIdx];
       __syncthreads();
       #pragma unroll 4
@@ -76,9 +75,9 @@ namespace cuda
       }
       __syncthreads();
     }
+
+    // compute epilogue
     tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
-
-
     //load the last tile
     shared_mem[threadIdx.x] = (tileIdx < nBodies) ? d_AoS[tileIdx] : make_float4(0.f, 0.f, 0.f, 0.f);
     __syncthreads();
@@ -96,6 +95,7 @@ namespace cuda
       acc.z += ai * rij.z;
     }
 
+    // store the result in global memory
     if(iBody < nBodies)
     {
       d_acc[iBody] = acc;
@@ -108,13 +108,14 @@ namespace cuda
 
 SimulationNBodyCudaAoS::SimulationNBodyCudaAoS(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
-    : SimulationNBodyInterface(nBodies, scheme, soft, randInit)
+    : numBlocks((nBodies + THREADS_PER_BLK - 1) / THREADS_PER_BLK),
+      SimulationNBodyInterface(nBodies, scheme, soft, randInit)
 {
     this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
     this->accelerations.resize(this->getBodies().getN());
 
     //print CUDA device properties of the current device
-    cuda::printGPUInfo();
+    //cuda::printGPUInfo();
 
     cudaHostAlloc(&h_AoS_4, nBodies * sizeof(float4), cudaHostAllocDefault);
 
@@ -145,8 +146,6 @@ void SimulationNBodyCudaAoS::computeBodiesAcceleration()
 
     //copy body data on device
     cudaMemcpy(d_AoS, h_AoS_4, n * sizeof(float4), cudaMemcpyHostToDevice);
-
-    int numBlocks = (n + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
 
     cuda::computeBodiesAccellAoS_k<<<numBlocks, THREADS_PER_BLK>>>((float4*)d_AoS, (float3*)d_acc, n, this->soft * this->soft, this->G);
 
