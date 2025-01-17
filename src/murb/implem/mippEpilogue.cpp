@@ -10,7 +10,7 @@ void compute_epilogue_mipp(const unsigned numBodies, const dataSoA_t<float> &h_S
     const mipp::Reg<float> softSquared(softSquared_param);
     const mipp::Reg<float> G(G_param);
 
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (unsigned long iBody = 0; iBody < numBodies; iBody++) {
 
         mipp::Reg<float> iqx(h_SoA.qx[iBody]);

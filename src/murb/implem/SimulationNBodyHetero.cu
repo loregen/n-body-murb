@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <chrono>
 
 #include "SimulationNBodyHetero.cuh"
 #include "mippEpilogue.hpp"
@@ -114,7 +115,6 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
     const unsigned long numBodies = this->getBodies().getN();
 
     const unsigned numFullTiles = numBodies / THREADS_PER_BLK;
-    //const unsigned remainder = numBodies % THREADS_PER_BLK;
 
     std::vector<float4> d_new(numBodies);
     #pragma omp parallel for
@@ -134,13 +134,46 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
     //copy body data on device
     cudaMemcpy(d_AoS, d_new.data(), numBodies * sizeof(float4), cudaMemcpyHostToDevice);
 
-    // launch the kernel (no epilogue)
-    int numBlocks = (numBodies + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
-    cuda::computeBodiesAccellHetero_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, numBodies, this->soft * this->soft, this->G);
+    // cudaEvent_t beforeKernel, afterCpuEpilogue, afterKernel;
+    // cudaEventCreate(&beforeKernel);
+    // cudaEventCreate(&afterCpuEpilogue);
+    // cudaEventCreate(&afterKernel);
 
-    compute_epilogue_mipp(numBodies, h_SoA, this->accelerations, this->G, this->soft * this->soft, numFullTiles * THREADS_PER_BLK);
-    //not needed ?
-    //cudaDeviceSynchronize();
+    // // Record start time
+    // cudaEventRecord(beforeKernel);
+
+
+
+    // Launch GPU kernel (non-blocking)
+    int numBlocks = (numBodies + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
+    auto beforeKernel = std::chrono::high_resolution_clock::now();
+    cuda::computeBodiesAccellHetero_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, numBodies, soft * soft, G);
+
+    // Do CPU work
+    compute_epilogue_mipp(numBodies, h_SoA, accelerations, G, soft * soft, numFullTiles * THREADS_PER_BLK);
+
+    auto afterCpuEpilogue = std::chrono::high_resolution_clock::now();
+
+    cudaError_t hasFinished = cudaStreamQuery(0);
+    if(hasFinished == cudaSuccess)
+    {
+      std::cout << "GPU finished before CPU" << std::endl;
+    }
+    else
+    { 
+      std::cout << "CPU is waiting for GPU" << std::endl;
+      cudaDeviceSynchronize();
+    }
+    auto afterKernel = std::chrono::high_resolution_clock::now();
+
+    // Calculate durations
+    float kernelDuration = std::chrono::duration<float, std::milli>(afterKernel - beforeKernel).count();
+    float cpuDuration = std::chrono::duration<float, std::milli>(afterCpuEpilogue - beforeKernel).count();
+    float gpuWaitDuration = std::chrono::duration<float, std::milli>(afterKernel - afterCpuEpilogue).count();
+
+    std::cout << "GPU Kernel duration: " << kernelDuration << " ms\n";
+    std::cout << "CPU Work duration: " << cpuDuration << " ms\n";
+    std::cout << "CPU waited for: " << gpuWaitDuration << " ms\n";
 
     // copy the cpu acc to the gpu
     float3 *d_acc_cpu = (float3*)d_AoS;
