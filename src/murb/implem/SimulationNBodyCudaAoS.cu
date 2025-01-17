@@ -156,7 +156,7 @@ void SimulationNBodyCudaAoS::computeBodiesAcceleration()
 
 void SimulationNBodyCudaAoS::computeOneIteration()
 {
-    this->initIteration();
+    //this->initIteration();
     this->computeBodiesAcceleration();
     // time integration
     this->bodies.updatePositionsAndVelocities(this->accelerations, this->dt);

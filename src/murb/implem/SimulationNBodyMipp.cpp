@@ -88,7 +88,7 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
 
 void SimulationNBodyMipp::computeOneIteration()
 {
-    this->initIteration();
+    //this->initIteration();
     this->computeBodiesAcceleration();
     // time integration
     this->bodies.updatePositionsAndVelocities(this->accelerations, this->dt);

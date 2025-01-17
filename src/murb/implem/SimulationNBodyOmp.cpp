@@ -36,6 +36,11 @@ void SimulationNBodyOmp::computeBodiesAcceleration()
     #pragma omp parallel for
     for (unsigned long iBody = 0; iBody < N; iBody++) {
         // flops = n * 20
+
+        float acc_x = 0.0f;
+        float acc_y = 0.0f;
+        float acc_z = 0.0f;
+
         #pragma omp simd
         for (unsigned long jBody = 0; jBody < N; jBody++) {
             const float rijx = d[jBody].qx - d[iBody].qx; // 1 flop
@@ -50,10 +55,14 @@ void SimulationNBodyOmp::computeBodiesAcceleration()
             const float ai = this->G * d[jBody].m / ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared)); // 5 flops
 
             // add the acceleration value into the acceleration vector: ai += || ai ||.rij
-            this->accelerations[iBody].ax += ai * rijx; // 2 flops
-            this->accelerations[iBody].ay += ai * rijy; // 2 flops
-            this->accelerations[iBody].az += ai * rijz; // 2 flops
+            acc_x += ai * rijx; // 2 flops
+            acc_y += ai * rijy; // 2 flops
+            acc_z += ai * rijz; // 2 flops
         }
+
+        this->accelerations[iBody].ax = acc_x;
+        this->accelerations[iBody].ay = acc_y;
+        this->accelerations[iBody].az = acc_z;
     }
 }
 
@@ -63,4 +72,5 @@ void SimulationNBodyOmp::computeOneIteration()
     this->computeBodiesAcceleration();
     // time integration
     this->bodies.updatePositionsAndVelocities(this->accelerations, this->dt);
+
 }
