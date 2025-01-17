@@ -114,7 +114,12 @@ SimulationNBodyCudaAoS::SimulationNBodyCudaAoS(const unsigned long nBodies, cons
     this->accelerations.resize(this->getBodies().getN());
 
     //print CUDA device properties of the current device
-    //cuda::printGPUInfo();
+    cuda::printGPUInfo();
+
+    cudaHostAlloc(&h_AoS_4, nBodies * sizeof(float4), cudaHostAllocDefault);
+
+    cudaMalloc(&d_AoS, nBodies * sizeof(float4));
+    cudaMalloc(&d_acc, nBodies * sizeof(float3));
 
 }
 
@@ -129,43 +134,25 @@ void SimulationNBodyCudaAoS::initIteration()
 
 void SimulationNBodyCudaAoS::computeBodiesAcceleration()
 {
-    const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
+    const std::vector<dataAoS_t<float>> &h_AoS_8 = this->getBodies().getDataAoS();
     const unsigned long n = this->getBodies().getN();
 
-    std::vector<float4> d_new(n);
     #pragma omp parallel for 
     for(unsigned long i = 0; i < n; i++)
     {
-        // d_new[i].x = d[i].qx;
-        // d_new[i].y = d[i].qy;
-        // d_new[i].z = d[i].qz;
-        // d_new[i].w = d[i].m;
-        memcpy(&d_new[i], &d[i], sizeof(float3));
-        d_new[i].w = d[i].m;
+      ((float4*)h_AoS_4)[i] = make_float4(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz, h_AoS_8[i].m);
     }
 
-    // device pointers
-    float4 *d_AoS;
-    float3 *d_acc;
-
-    // allocate memory on the device
-    cudaMalloc(&d_AoS, n * sizeof(float4));
-    cudaMalloc(&d_acc, n * sizeof(float3));
-
     //copy body data on device
-    // cudaMemcpy(d_AoS, d.data(), 4 * n * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_AoS, d_new.data(), n * sizeof(float4), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_AoS, h_AoS_4, n * sizeof(float4), cudaMemcpyHostToDevice);
 
     int numBlocks = (n + THREADS_PER_BLK - 1) / THREADS_PER_BLK;
 
-    cuda::computeBodiesAccellAoS_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, n, this->soft * this->soft, this->G);
+    cuda::computeBodiesAccellAoS_k<<<numBlocks, THREADS_PER_BLK>>>((float4*)d_AoS, (float3*)d_acc, n, this->soft * this->soft, this->G);
 
     //copy back the result
     cudaMemcpy(this->accelerations.data(), d_acc, n * sizeof(float3), cudaMemcpyDeviceToHost);
 
-    //free memory
-    cudaFree(d_AoS);
-    cudaFree(d_acc);
 }
 
 void SimulationNBodyCudaAoS::computeOneIteration()
@@ -174,4 +161,13 @@ void SimulationNBodyCudaAoS::computeOneIteration()
     this->computeBodiesAcceleration();
     // time integration
     this->bodies.updatePositionsAndVelocities(this->accelerations, this->dt);
+}
+
+SimulationNBodyCudaAoS::~SimulationNBodyCudaAoS()
+{
+    //free memory
+    cudaFree(d_AoS);
+    cudaFree(d_acc);
+
+    cudaFreeHost(h_AoS_4);
 }
