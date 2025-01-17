@@ -96,8 +96,6 @@ SimulationNBodyHetero::SimulationNBodyHetero(const unsigned long nBodies, const 
     this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
     this->accelerations.resize(this->getBodies().getN());
 
-    std::cout << "padding: " << this->getBodies().getPadding() << std::endl;
-
 }
 
 void SimulationNBodyHetero::initIteration()
@@ -131,7 +129,7 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
 
     // allocate memory on the device
     cudaMalloc(&d_AoS, numBodies * sizeof(float4));
-    // cudaMalloc(&d_acc, numBodies * sizeof(float3));
+    cudaMalloc(&d_acc, numBodies * sizeof(float3));
 
     //copy body data on device
     cudaMemcpy(d_AoS, d_new.data(), numBodies * sizeof(float4), cudaMemcpyHostToDevice);
@@ -141,9 +139,8 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
     cuda::computeBodiesAccellHetero_k<<<numBlocks, THREADS_PER_BLK>>>(d_AoS, d_acc, numBodies, this->soft * this->soft, this->G);
 
     compute_epilogue_mipp(numBodies, h_SoA, this->accelerations, this->G, this->soft * this->soft, numFullTiles * THREADS_PER_BLK);
-
     //not needed ?
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 
     // copy the cpu acc to the gpu
     float3 *d_acc_cpu = (float3*)d_AoS;
