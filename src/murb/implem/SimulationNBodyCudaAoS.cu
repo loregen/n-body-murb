@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <algorithm>
 
 #include "SimulationNBodyCudaAoS.cuh"
 
@@ -135,9 +136,11 @@ void SimulationNBodyCudaAoS::computeBodiesAcceleration()
     #pragma omp parallel for 
     for(unsigned long i = 0; i < n; i++)
     {
-        d_new[i].x = d[i].qx;
-        d_new[i].y = d[i].qy;
-        d_new[i].z = d[i].qz;
+        // d_new[i].x = d[i].qx;
+        // d_new[i].y = d[i].qy;
+        // d_new[i].z = d[i].qz;
+        // d_new[i].w = d[i].m;
+        memcpy(&d_new[i], &d[i], sizeof(float3));
         d_new[i].w = d[i].m;
     }
 

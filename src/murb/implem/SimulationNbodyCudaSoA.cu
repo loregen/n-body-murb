@@ -40,7 +40,7 @@ namespace cuda
 
       shared_mem[threadIdx.x] = make_float4(d_x[tileIdx], d_y[tileIdx], d_z[tileIdx], d_mass[tileIdx]);
       __syncthreads();
-      #pragma unroll 8
+      //#pragma unroll 8
       for(unsigned jBody = 0; jBody < THREADS_PER_BLK; jBody++)
       {
         float4 otherBody = shared_mem[jBody];
