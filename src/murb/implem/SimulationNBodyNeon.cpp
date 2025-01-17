@@ -34,15 +34,15 @@ void SimulationNBodyNeon::computeBodiesAcceleration()
 {
 
         // Pre-broadcast constants
-    const float soft2 = this->soft * this->soft;  // e²
-    const float32x4_t vSoft2 = vdupq_n_f32(soft2);
-    const float32x4_t vG     = vdupq_n_f32(this->G);
     const dataSoA_t<float> &d = this->getBodies().getDataSoA();
 
-    unsigned long nBodies = this->getBodies().getN();
+    const float32x4_t vSoft2  = vdupq_n_f32(this->soft * this->soft);
+    const float32x4_t machini = vdupq_n_f32(this->G);
 
-        #pragma omp parallel for 
-    for (unsigned long iBody = 0; iBody < nBodies; iBody++)
+    const unsigned  nBodies = this->getBodies().getN();
+
+    #pragma omp parallel for 
+    for (unsigned  iBody = 0; iBody < nBodies; iBody++)
     {
         // Broadcast iBody's position
         const float32x4_t vi_x = vdupq_n_f32(d.qx[iBody]);
@@ -63,38 +63,28 @@ void SimulationNBodyNeon::computeBodiesAcceleration()
             float32x4_t rij_y = vsubq_f32(vld1q_f32(&d.qy[jBody]), vi_y);
             float32x4_t rij_z = vsubq_f32(vld1q_f32(&d.qz[jBody]), vi_z);
 
-            // Compute r² = (x² + y² + z²)
-            float32x4_t r2_e2 = vmlaq_f32(
-                                    vmlaq_f32(
-                                        vmulq_f32(rij_x, rij_x), 
-                                        rij_y, rij_y
-                                        )
-                                        , rij_z, rij_z
-                                    ); 
-            
+            // r^2 = x^2 + y^2 + z^2
+            float32x4_t r2 = vmlaq_f32( vaddq_f32(vmulq_f32(rij_x, rij_x),vmulq_f32(rij_y, rij_y)),rij_z,rij_z);
 
-            // Add softening e²
-            r2_e2 = vaddq_f32(r2_e2, vSoft2);
+            // Add the softening squared
+            r2 = vaddq_f32(r2, vSoft2);
+            r2 = vmulq_f32(r2,vsqrtq_f32(r2));
+            float32x4_t inv_r3 = vrecpeq_f32(r2); 
 
-
-            float32x4_t inv_r3    = vmulq_f32(r2_e2, vsqrtq_f32(r2_e2));      // (r² + e²) * sqrt(r² + e²)
-            inv_r3 = vdivq_f32(vmulq_f32(vG, vld1q_f32(&d.m[jBody])), inv_r3);
+            // Multiply by G * m_j
+            inv_r3 = vmulq_f32(inv_r3, machini);
+            inv_r3 = vmulq_f32(inv_r3, vld1q_f32(&d.m[jBody]));
 
             // a_i += inv_r3 * r_ij
+            // Use fused multiply-add if possible: partial_sum_x = partial_sum_x + inv_r3*rij_x
             partial_sum_x = vmlaq_f32(partial_sum_x, inv_r3, rij_x);
             partial_sum_y = vmlaq_f32(partial_sum_y, inv_r3, rij_y);
             partial_sum_z = vmlaq_f32(partial_sum_z, inv_r3, rij_z);
         }
-
-        float32x2_t tmp = vadd_f32(vget_low_f32(partial_sum_x),
-                                    vget_high_f32(partial_sum_x));
-        this->accelerations[iBody].ax += vget_lane_f32(tmp, 0)+vget_lane_f32(tmp, 1);
-        tmp = vadd_f32(vget_low_f32(partial_sum_y),
-                                    vget_high_f32(partial_sum_y));
-        this->accelerations[iBody].ay += vget_lane_f32(tmp, 0)+vget_lane_f32(tmp, 1);
-        tmp = vadd_f32(vget_low_f32(partial_sum_z),
-                                    vget_high_f32(partial_sum_z));
-        this->accelerations[iBody].az += vget_lane_f32(tmp, 0)+vget_lane_f32(tmp, 1);
+    
+        this->accelerations[iBody].ax += vaddvq_f32(partial_sum_x);
+        this->accelerations[iBody].ay += vaddvq_f32(partial_sum_y);
+        this->accelerations[iBody].az += vaddvq_f32(partial_sum_z);
 
 
         // Handle any leftover bodies if nBodies is not multiple of NEON_VF_LEN
@@ -104,7 +94,7 @@ void SimulationNBodyNeon::computeBodiesAcceleration()
             float rx = d.qx[jBody] - d.qx[iBody];
             float ry = d.qy[jBody] - d.qy[iBody];
             float rz = d.qz[jBody] - d.qz[iBody];
-            float r2 = rx*rx + ry*ry + rz*rz + soft2; // include e²
+            float r2 = rx*rx + ry*ry + rz*rz + this->soft * this->soft; // include e²
             float inv_r3 = (this->G * d.m[jBody]) / (r2 * std::sqrt(r2));
             this->accelerations[iBody].ax += inv_r3 * rx;
             this->accelerations[iBody].ay += inv_r3 * ry;

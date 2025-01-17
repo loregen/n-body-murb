@@ -54,5 +54,5 @@ dkms.conf
 
 # CMake
 build*/
-
 .DS_Store
+.vscode/
