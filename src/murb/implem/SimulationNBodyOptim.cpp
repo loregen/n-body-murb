@@ -9,10 +9,15 @@
 
 SimulationNBodyOptim::SimulationNBodyOptim(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
-    : SimulationNBodyInterface(nBodies, scheme, soft, randInit)
+    : SimulationNBodyInterface(nBodies, scheme, soft, randInit), softSquared(soft * soft), mTimesG(nBodies)
 {
     this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
     this->accelerations.resize(this->getBodies().getN());
+
+    const std::vector<float> &masses = this->getBodies().getDataSoA().m;
+    for (unsigned iBody = 0; iBody < nBodies; iBody++) {
+        this->mTimesG[iBody] = this->G * masses[iBody];
+    }
 }
 
 void SimulationNBodyOptim::initIteration()
@@ -28,13 +33,17 @@ void SimulationNBodyOptim::computeBodiesAcceleration()
 {
     const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
 
-    const float softSquared = this->soft * this->soft; // 1 flops
-
     const unsigned N = this->getBodies().getN();
 
     // flops = n² * 20
     for (unsigned long iBody = 0; iBody < N; iBody++) {
         // flops = n * 20
+
+        //registers to accumulate acceleration and avoid setting to zero before each iteration
+        float acc_x = 0.f;
+        float acc_y = 0.f;
+        float acc_z = 0.f;
+
         for (unsigned long jBody = 0; jBody < N; jBody++) {
             const float rijx = d[jBody].qx - d[iBody].qx; // 1 flop
             const float rijy = d[jBody].qy - d[iBody].qy; // 1 flop
@@ -45,19 +54,25 @@ void SimulationNBodyOptim::computeBodiesAcceleration()
             // compute e²
             // const float softSquared = this->soft * this->soft; // 1 flops
             // compute the acceleration value between body i and body j: || ai || = G.mj / (|| rij ||² + e²)^{3/2}
-            const float ai = this->G * d[jBody].m / ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared)); // 5 flops
+            const float ai = this->mTimesG[jBody] / ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared)); // 5 flops
 
             // add the acceleration value into the acceleration vector: ai += || ai ||.rij
-            this->accelerations[iBody].ax += ai * rijx; // 2 flops
-            this->accelerations[iBody].ay += ai * rijy; // 2 flops
-            this->accelerations[iBody].az += ai * rijz; // 2 flops
+
+            acc_x += ai * rijx; // 1 flop
+            acc_y += ai * rijy; // 1 flop
+            acc_z += ai * rijz; // 1 flop
         }
+
+        this->accelerations[iBody].ax = acc_x;
+        this->accelerations[iBody].ay = acc_y;
+        this->accelerations[iBody].az = acc_z;
+
     }
 }
 
 void SimulationNBodyOptim::computeOneIteration()
 {
-    this->initIteration();
+    //this->initIteration();
     this->computeBodiesAcceleration();
     // time integration
     this->bodies.updatePositionsAndVelocities(this->accelerations, this->dt);
