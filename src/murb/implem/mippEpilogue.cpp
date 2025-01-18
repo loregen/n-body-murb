@@ -14,7 +14,7 @@ void SimulationNBodyHetero::computeEpilogueMipp()
   const mipp::Reg<float> softSquared(this->soft * this->soft);
   const mipp::Reg<float> G(this->G);
 
-  #pragma omp parallel for schedule(static)
+  #pragma omp parallel for
   for (unsigned iBody = iStart; iBody < nBodies; iBody++) {
 
       mipp::Reg<float> iqx(h_SoA.qx[iBody]);

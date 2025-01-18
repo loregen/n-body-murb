@@ -25,6 +25,8 @@
 #include "implem/SimulationNBodyOmp.hpp"
 #include "implem/SimulationNBodyCudaAoS.cuh"
 #include "implem/SimulationNBodyLoop.hpp"
+#include "implem/SimulationNBodyBlocked.hpp"
+
 #include "implem/SimulationNBodyCudaSoA.cuh"
 #include "implem/SimulationNBodyHetero.cuh"
 #include "implem/SimulationNBodyNeon.hpp"
@@ -87,12 +89,13 @@ void argsReader(int argc, char **argv)
                      "\t\t\t - \"cpu+optim\"\n"
                      "\t\t\t - \"cpu+tri\"\n"
                      "\t\t\t - \"cpu+mipp\"\n"
-                      "\t\t\t - \"cpu+omp\""
-                      "\t\t\t - \"cuda+AoS\""
-                      "\t\t\t - \"cpu+loop\""
-                      "\t\t\t - \"cuda+SoA\""
-                      "\t\t\t - \"cpu+cuda\""
-                      "\t\t\t - \"cpu+neon\"";
+                      "\t\t\t - \"cpu+omp\"\n"
+                      "\t\t\t - \"cuda+AoS\"\n"
+                      "\t\t\t - \"cpu+loop\"\n"
+                      "\t\t\t - \"cuda+SoA\"\n"
+                      "\t\t\t - \"cpu+cuda\"\n"
+                      "\t\t\t - \"cpu+neon\"\n"
+                      "\t\t\t - \"cpu+blocked\"\n";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
 #ifdef USE_OCL
@@ -227,6 +230,9 @@ SimulationNBodyInterface *createImplem()
     }
     else if (ImplTag == "cpu+neon") {
         simu = new SimulationNBodyNeon(NBodies, BodiesScheme, Softening);
+    }
+    else if (ImplTag == "cpu+blocked") {
+        simu = new SimulationNBodyBlocked(NBodies, BodiesScheme, Softening);
     }
     else {
         std::cout << "Implementation '" << ImplTag << "' does not exist... Exiting." << std::endl;

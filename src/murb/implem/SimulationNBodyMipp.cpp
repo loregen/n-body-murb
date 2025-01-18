@@ -68,7 +68,8 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
             // const float ai = this->G * d[jBody].m / ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared)); // 5 flops
 
             mipp::Reg<float> m(&d.m[jBody]);
-            mipp::Reg<float> ai = G * m / ((rijSquared + softSquared) * mipp::sqrt(rijSquared + softSquared));
+            rijSquared += softSquared;
+            mipp::Reg<float> ai = G * m / (rijSquared * mipp::sqrt(rijSquared));
 
             // // add the acceleration value into the acceleration vector: ai += || ai ||.rij
             // this->accelerations[iBody].ax += ai * rijx; // 2 flops
