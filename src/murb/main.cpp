@@ -23,11 +23,12 @@
 #include "implem/SimulationNBodyTri.hpp"
 #include "implem/SimulationNBodyMipp.hpp"
 #include "implem/SimulationNBodyOmp.hpp"
-#include "implem/SimulationNBodyCudaAoS.cuh"
 #include "implem/SimulationNBodyLoop.hpp"
-#include "implem/SimulationNBodyCudaSoA.cuh"
-#include "implem/SimulationNBodyHetero.cuh"
 #include "implem/SimulationNBodyNeon.hpp"
+
+// #include "implem/SimulationNBodyCudaAoS.cuh"
+// #include "implem/SimulationNBodyCudaSoA.cuh"
+// #include "implem/SimulationNBodyHetero.cuh"
 
 /* global variables */
 unsigned long NBodies;               /*!< Number of bodies. */
@@ -216,15 +217,15 @@ SimulationNBodyInterface *createImplem()
     else if (ImplTag == "cpu+loop") {
         simu = new SimulationNBodyLoop(NBodies, BodiesScheme, Softening);
     }
-    else if (ImplTag == "cuda+AoS") {
-        simu = new SimulationNBodyCudaAoS(NBodies, BodiesScheme, Softening);
-    }
-    else if (ImplTag == "cuda+SoA") {
-        simu = new SimulationNBodyCudaSoA(NBodies, BodiesScheme, Softening);
-    }
-    else if (ImplTag == "cpu+cuda") {
-        simu = new SimulationNBodyHetero(NBodies, BodiesScheme, Softening);
-    }
+    // else if (ImplTag == "cuda+AoS") {
+    //     simu = new SimulationNBodyCudaAoS(NBodies, BodiesScheme, Softening);
+    // }
+    // else if (ImplTag == "cuda+SoA") {
+    //     simu = new SimulationNBodyCudaSoA(NBodies, BodiesScheme, Softening);
+    // }
+    // else if (ImplTag == "cpu+cuda") {
+    //     simu = new SimulationNBodyHetero(NBodies, BodiesScheme, Softening);
+    // }
     else if (ImplTag == "cpu+neon") {
         simu = new SimulationNBodyNeon(NBodies, BodiesScheme, Softening);
     }

@@ -9,7 +9,7 @@ option (ENABLE_VISU      "Enable the OpenGL visualization"              ON )
 option (ENABLE_TEST      "Enable test program to validate MUrB kernels" ON )
 option (ENABLE_MURB_OMP  "Enable to compile the MUrB OMP executable"    ON )
 option (ENABLE_MURB_OCL  "Enable to compile the MUrB OCL executable"    OFF)
-option (ENABLE_MURB_CUDA "Enable to compile MUsB CUDA executable"       ON)
+option (ENABLE_MURB_CUDA "Enable to compile MUsB CUDA executable"       OFF)
 
 
 if (NOT ENABLE_MURB)
