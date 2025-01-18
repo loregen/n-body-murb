@@ -8,11 +8,13 @@ void SimulationNBodyHetero::computeEpilogueMipp()
 
   const dataSoA_t<float> &h_SoA = this->getBodies().getDataSoA();
 
+  //std::cout << "istart: " << iStart << std::endl;
+
   // compute epilogue on the CPU
   const mipp::Reg<float> softSquared(this->soft * this->soft);
   const mipp::Reg<float> G(this->G);
 
-  #pragma omp parallel for 
+  #pragma omp parallel for schedule(static)
   for (unsigned iBody = iStart; iBody < nBodies; iBody++) {
 
       mipp::Reg<float> iqx(h_SoA.qx[iBody]);
@@ -30,15 +32,17 @@ void SimulationNBodyHetero::computeEpilogueMipp()
           mipp::Reg<float> rijz(mipp::Reg<float>(&h_SoA.qz[jBody]) - iqz);
 
           mipp::Reg<float> rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
-
+          rijSquared = rijSquared + softSquared;
           // // compute e²
-          mipp::Reg<float> m(&h_SoA.m[jBody]);
-          mipp::Reg<float> ai = G * m / ((rijSquared + softSquared) * mipp::sqrt(rijSquared + softSquared));
+          // mipp::Reg<float> m(&h_SoA.m[jBody]);
+          // mipp::Reg<float> ai = m / (rijSquared * mipp::sqrt(rijSquared));
+          mipp::Reg<float> mTimesG_reg(&mTimesG[jBody]);
+          mipp::Reg<float> ai = mTimesG_reg / (rijSquared * mipp::sqrt(rijSquared));
 
           // // add the acceleration value into the acceleration vector: ai += || ai ||.rij
-          axi_reg += ai * rijx;
-          ayi_reg += ai * rijy;
-          azi_reg += ai * rijz;
+          axi_reg = mipp::fmadd(ai, rijx, axi_reg);
+          ayi_reg = mipp::fmadd(ai, rijy, ayi_reg);
+          azi_reg = mipp::fmadd(ai, rijz, azi_reg);
       }
       // store the acceleration value into the acceleration vector
       accelerations[iBody].ax = mipp::sum<float>(axi_reg);

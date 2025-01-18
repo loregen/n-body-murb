@@ -44,7 +44,6 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
         mipp::Reg<float> iqy(d.qy[iBody]);
         mipp::Reg<float> iqz(d.qz[iBody]);
 
-
         mipp::Reg<float> axi(0.0);
         mipp::Reg<float> ayi(0.0);
         mipp::Reg<float> azi(0.0);
@@ -61,6 +60,7 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
             // const float rijSquared = rijx * rijx + rijy * rijy + rijz * rijz; // 5 flops
 
             mipp::Reg<float> rijSquared = rijx * rijx + rijy * rijy + rijz * rijz;
+            //mipp::Reg<float> rijSquared = mipp::fmadd(rijx, rijx, mipp::fmadd(rijy, rijy, rijz * rijz));
 
             // // compute e²
             // // const float softSquared = this->soft * this->soft; // 1 flops
@@ -75,9 +75,12 @@ void SimulationNBodyMipp::computeBodiesAcceleration()
             // this->accelerations[iBody].ay += ai * rijy; // 2 flops
             // this->accelerations[iBody].az += ai * rijz; // 2 flops
 
-            axi += ai * rijx;
-            ayi += ai * rijy;
-            azi += ai * rijz;
+            // axi += ai * rijx;
+            // ayi += ai * rijy;
+            // azi += ai * rijz;
+            axi = mipp::fmadd(ai, rijx, axi);
+            ayi = mipp::fmadd(ai, rijy, ayi);
+            azi = mipp::fmadd(ai, rijz, azi);
         }
         // store the acceleration value into the acceleration vector
         this->accelerations[iBody].ax = mipp::sum<float>(axi);

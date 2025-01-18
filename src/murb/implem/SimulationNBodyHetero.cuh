@@ -9,6 +9,7 @@ class SimulationNBodyHetero : public SimulationNBodyInterface {
   protected:
     std::vector<accAoS_t<float>> accelerations; /*!< Array of body acceleration structures. */
 
+    std::vector<float> mTimesG;
     // vector to store the reduced AoS to be copied to the device
     float *h_AoS_4; 
     // device pointers
