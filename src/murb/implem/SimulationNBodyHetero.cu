@@ -95,13 +95,13 @@ SimulationNBodyHetero::SimulationNBodyHetero(const unsigned long nBodies, const 
     }
     else
     {
-      std::cout << "Running only epilogue on CPU" << std::endl;
+      // std::cout << "Running only epilogue on CPU" << std::endl;
       numBlocks = nFullBlocks;
     }
     nBodiesGpu = numBlocks * THREADS_PER_BLK;
     if(nBodiesGpu == 0)
     {
-      std::cout << "Not enough bodies to run on GPU" << std::endl;
+      // std::cout << "Not enough bodies to run on GPU" << std::endl;
     }
 
     cudaHostAlloc(&h_AoS_4, nBodies * sizeof(float4), cudaHostAllocDefault);

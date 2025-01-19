@@ -26,10 +26,10 @@
 #include "implem/SimulationNBodyCudaAoS.cuh"
 #include "implem/SimulationNBodyLoop.hpp"
 #include "implem/SimulationNBodyBlocked.hpp"
-
 #include "implem/SimulationNBodyCudaSoA.cuh"
 #include "implem/SimulationNBodyHetero.cuh"
 #include "implem/SimulationNBodyNeon.hpp"
+#include "implem/SimulationNBodyMippOmpInternal.hpp"
 
 /* global variables */
 unsigned long NBodies;               /*!< Number of bodies. */
@@ -95,7 +95,8 @@ void argsReader(int argc, char **argv)
                       "\t\t\t - \"cuda+SoA\"\n"
                       "\t\t\t - \"cpu+cuda\"\n"
                       "\t\t\t - \"cpu+neon\"\n"
-                      "\t\t\t - \"cpu+blocked\"\n";
+                      "\t\t\t - \"cpu+blocked\"\n"
+                      "\t\t\t - \"cpu+omp+mipp+internal\"\n";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
 #ifdef USE_OCL
@@ -233,6 +234,9 @@ SimulationNBodyInterface *createImplem()
     }
     else if (ImplTag == "cpu+blocked") {
         simu = new SimulationNBodyBlocked(NBodies, BodiesScheme, Softening);
+    }
+    else if (ImplTag == "cpu+omp+mipp+internal") {
+        simu = new SimulationNBodyMippOmpInternal(NBodies, BodiesScheme, Softening);
     }
     else {
         std::cout << "Implementation '" << ImplTag << "' does not exist... Exiting." << std::endl;

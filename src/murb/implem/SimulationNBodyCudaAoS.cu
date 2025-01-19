@@ -115,7 +115,7 @@ SimulationNBodyCudaAoS::SimulationNBodyCudaAoS(const unsigned long nBodies, cons
     this->accelerations.resize(this->getBodies().getN());
 
     //print CUDA device properties of the current device
-    cuda::printGPUInfo();
+    // cuda::printGPUInfo();
 
     cudaHostAlloc(&h_AoS_4, nBodies * sizeof(float4), cudaHostAllocDefault);
 
