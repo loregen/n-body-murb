@@ -30,6 +30,7 @@
 #include "implem/SimulationNBodyHetero.cuh"
 #include "implem/SimulationNBodyNeon.hpp"
 #include "implem/SimulationNBodyMippOmpInternal.hpp"
+#include "implem/SimulationNBodyOCL.hpp"
 
 /* global variables */
 unsigned long NBodies;               /*!< Number of bodies. */
@@ -85,18 +86,19 @@ void argsReader(int argc, char **argv)
     docArgs["-nvc"] = "visualization without colors.";
     faculArgs["-im"] = "ImplTag";
     docArgs["-im"] = "code implementation tag:\n"
-                     "\t\t\t - \"cpu+naive\"\n"
-                     "\t\t\t - \"cpu+optim\"\n"
-                     "\t\t\t - \"cpu+tri\"\n"
-                     "\t\t\t - \"cpu+mipp\"\n"
-                      "\t\t\t - \"cpu+omp\"\n"
-                      "\t\t\t - \"cuda+AoS\"\n"
-                      "\t\t\t - \"cpu+loop\"\n"
-                      "\t\t\t - \"cuda+SoA\"\n"
-                      "\t\t\t - \"cpu+cuda\"\n"
-                      "\t\t\t - \"cpu+neon\"\n"
-                      "\t\t\t - \"cpu+blocked\"\n"
-                      "\t\t\t - \"cpu+omp+mipp+internal\"\n";
+                        "\t\t\t - \"cpu+naive\"\n"
+                        "\t\t\t - \"cpu+optim\"\n"
+                        "\t\t\t - \"cpu+tri\"\n"
+                        "\t\t\t - \"cpu+mipp\"\n"
+                        "\t\t\t - \"cpu+omp\"\n"
+                        "\t\t\t - \"cuda+AoS\"\n"
+                        "\t\t\t - \"cpu+loop\"\n"
+                        "\t\t\t - \"cuda+SoA\"\n"
+                        "\t\t\t - \"cpu+cuda\"\n"
+                        "\t\t\t - \"cpu+neon\"\n"
+                        "\t\t\t - \"cpu+blocked\"\n"
+                        "\t\t\t - \"gpu+ocl\"\n"
+                        "\t\t\t - \"cpu+omp+mipp+internal\"\n";
     faculArgs["-soft"] = "softeningFactor";
     docArgs["-soft"] = "softening factor.";
 #ifdef USE_OCL
@@ -237,6 +239,9 @@ SimulationNBodyInterface *createImplem()
     }
     else if (ImplTag == "cpu+omp+mipp+internal") {
         simu = new SimulationNBodyMippOmpInternal(NBodies, BodiesScheme, Softening);
+    }
+    else if (ImplTag == "gpu+ocl") {
+        simu = new SimulationNBodyOCL(NBodies, BodiesScheme, Softening);
     }
     else {
         std::cout << "Implementation '" << ImplTag << "' does not exist... Exiting." << std::endl;
