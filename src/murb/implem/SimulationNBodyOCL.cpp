@@ -1,3 +1,5 @@
+#include "SimulationNBodyOCL.hpp"
+#include <CL/cl.hpp>
 #include <cassert>
 #include <cmath>
 #include <fstream>
@@ -5,14 +7,42 @@
 #include <limits>
 #include <string>
 
-#include "SimulationNBodyOCL.hpp"
-
 SimulationNBodyOCL::SimulationNBodyOCL(const unsigned long nBodies, const std::string &scheme, const float soft,
-                                           const unsigned long randInit)
+                                       const unsigned long randInit)
     : SimulationNBodyInterface(nBodies, scheme, soft, randInit)
 {
     this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
     this->accelerations.resize(this->getBodies().getN());
+    /* OCL Device test */
+    std::vector<cl::Platform> platforms;
+    cl::Platform::get(&platforms);
+    if (platforms.empty()) {
+        std::cerr << "No OpenCL platforms found!" << std::endl;
+    }
+
+    // Iterate through platforms and display information
+    for (size_t i = 0; i < platforms.size(); ++i) {
+
+        std::cout << "Platform " << i + 1 << ": " << platforms[i].getInfo<CL_PLATFORM_NAME>() << std::endl;
+        // Get devices for this platform
+        std::vector<cl::Device> devices;
+        platforms[i].getDevices(CL_DEVICE_TYPE_ALL, &devices);
+
+        if (devices.empty()) {
+            std::cout << "  No devices found for this platform." << std::endl;
+            continue;
+        }
+
+        // Display device information
+        for (size_t j = 0; j < devices.size(); ++j) {
+            std::cout << "  Device " << j + 1 << ": " << devices[j].getInfo<CL_DEVICE_NAME>() << std::endl;
+            std::cout << "    Vendor: " << devices[j].getInfo<CL_DEVICE_VENDOR>() << std::endl;
+            std::cout << "    Version: " << devices[j].getInfo<CL_DEVICE_VERSION>() << std::endl;
+            std::cout << "    Max Compute Units: " << devices[j].getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+            std::cout << "    Global Memory Size: " << devices[j].getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() / (1024 * 1024)
+                      << " MB" << std::endl;
+        }
+    }
 }
 
 void SimulationNBodyOCL::initIteration()
