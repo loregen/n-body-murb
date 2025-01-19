@@ -9,10 +9,15 @@
 
 SimulationNBodyTri::SimulationNBodyTri(const unsigned long nBodies, const std::string &scheme, const float soft,
                                            const unsigned long randInit)
-    : SimulationNBodyInterface(nBodies, scheme, soft, randInit)
+    : SimulationNBodyInterface(nBodies, scheme, soft, randInit), softSquared(soft * soft), mTimesG(nBodies)
 {
-    this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
+    this->flopsPerIte = 25.0f * nBodies * (nBodies - 1) / 2;
     this->accelerations.resize(this->getBodies().getN());
+
+    const std::vector<float> &masses = this->getBodies().getDataSoA().m;
+    for (unsigned iBody = 0; iBody < nBodies; iBody++) {
+        this->mTimesG[iBody] = this->G * masses[iBody];
+    }
 }
 
 void SimulationNBodyTri::initIteration()
@@ -28,25 +33,18 @@ void SimulationNBodyTri::computeBodiesAcceleration()
 {
     const std::vector<dataAoS_t<float>> &d = this->getBodies().getDataAoS();
 
-    const float softSquared = this->soft * this->soft; // 1 flops
-
-    // flops = n² * 20
     for (unsigned long iBody = 0; iBody < this->getBodies().getN(); iBody++) {
-        // flops = n * 20
-        //#pragma omp simd
         for (unsigned long jBody = iBody + 1; jBody < this->getBodies().getN(); jBody++) {
             const float rijx = d[jBody].qx - d[iBody].qx; // 1 flop
             const float rijy = d[jBody].qy - d[iBody].qy; // 1 flop
             const float rijz = d[jBody].qz - d[iBody].qz; // 1 flop
 
-            // compute the || rij ||² distance between body i and body j
             const float rijSquared = rijx * rijx + rijy * rijy + rijz * rijz; // 5 flops
-            // compute e²
-            // compute the acceleration value between body i and body j: || ai || = G.mj / (|| rij ||² + e²)^{3/2}
-            const float ai = this->G * d[jBody].m / ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared)); // 5 flops
-            const float aj = this->G * d[iBody].m / ((rijSquared + softSquared) * std::sqrt(rijSquared + softSquared)); // 5 flops
 
-            // add the acceleration value into the acceleration vector: ai += || ai ||.rij
+            const float denominator = (rijSquared + softSquared) * std::sqrt(rijSquared + softSquared); // 3 flops
+            const float ai = this->mTimesG[jBody] / denominator; // 1 flops
+            const float aj = this->mTimesG[iBody] / denominator; // 1 flops
+
             this->accelerations[iBody].ax += ai * rijx; // 2 flops
             this->accelerations[iBody].ay += ai * rijy; // 2 flops
             this->accelerations[iBody].az += ai * rijz; // 2 flops

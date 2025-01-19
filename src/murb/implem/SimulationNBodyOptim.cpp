@@ -11,7 +11,7 @@ SimulationNBodyOptim::SimulationNBodyOptim(const unsigned long nBodies, const st
                                            const unsigned long randInit)
     : SimulationNBodyInterface(nBodies, scheme, soft, randInit), softSquared(soft * soft), mTimesG(nBodies)
 {
-    this->flopsPerIte = 20.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
+    this->flopsPerIte = 18.f * (float)this->getBodies().getN() * (float)this->getBodies().getN();
     this->accelerations.resize(this->getBodies().getN());
 
     const std::vector<float> &masses = this->getBodies().getDataSoA().m;
@@ -58,9 +58,9 @@ void SimulationNBodyOptim::computeBodiesAcceleration()
 
             // add the acceleration value into the acceleration vector: ai += || ai ||.rij
 
-            acc_x += ai * rijx; // 1 flop
-            acc_y += ai * rijy; // 1 flop
-            acc_z += ai * rijz; // 1 flop
+            acc_x += ai * rijx; // 2 flop
+            acc_y += ai * rijy; // 2 flop
+            acc_z += ai * rijz; // 2 flop
         }
 
         this->accelerations[iBody].ax = acc_x;

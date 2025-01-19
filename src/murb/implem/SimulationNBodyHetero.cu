@@ -11,7 +11,7 @@
 //CUDA parameters, tuned on -n 30000
 #define THREADS_PER_BLK 512
 #define MAX_SHARED_PER_BLOCK 48000
-#define NUM_BLOCKS_CPU 2
+#define NUM_BLOCKS_CPU 0
 
 namespace cuda
 {
