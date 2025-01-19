@@ -11,11 +11,10 @@
 //CUDA parameters, tuned on -n 30000
 #define THREADS_PER_BLK 512
 #define MAX_SHARED_PER_BLOCK 48000
-#define NUM_BLOCKS_CPU 7
+#define NUM_BLOCKS_CPU 2
 
 namespace cuda
 {
-  __constant__ float d_G;
   __constant__ float d_softSquared;
 
   __global__ void computeBodiesAccellHetero_k(float4 *d_AoS, float3 *d_acc, const unsigned nBodies)
@@ -44,9 +43,8 @@ namespace cuda
         float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
         float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + d_softSquared;
 
-        float ai = d_G * otherBody.w / (rijSquared * sqrtf(rijSquared));
-        //molto strano che la prossima riga sia molto più lenta
-        //float ai = otherBody.w / (rijSquared * sqrtf(rijSquared));
+        //float ai = d_G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+        float ai = otherBody.w / (rijSquared * sqrtf(rijSquared));
 
         acc.x += ai * rij.x;
         acc.y += ai * rij.y;
@@ -67,7 +65,8 @@ namespace cuda
       float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
       float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + d_softSquared;
 
-      float ai = d_G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+      //float ai = d_G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+      float ai = otherBody.w / (rijSquared * sqrtf(rijSquared));
 
       acc.x += ai * rij.x;
       acc.y += ai * rij.y;
@@ -110,11 +109,10 @@ SimulationNBodyHetero::SimulationNBodyHetero(const unsigned long nBodies, const 
     cudaMalloc(&d_acc, nBodiesGpu * sizeof(float3));
 
     //copy the constant memory
-    cudaMemcpyToSymbol(cuda::d_G, &G, sizeof(float));
     const float softSquared = soft * soft;
     cudaMemcpyToSymbol(cuda::d_softSquared, &softSquared, sizeof(float));
 
-    //initialize mTimesG auxiliar vector
+    //initialize mTimesG auxiliar vector (for cpu computation)
     const std::vector<float> &masses = this->getBodies().getDataSoA().m;
     for (unsigned iBody = 0; iBody < nBodies; iBody++)
     {
@@ -137,14 +135,11 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
     const dataSoA_t<float> &h_SoA = this->getBodies().getDataSoA();
     const unsigned nBodies = this->getBodies().getN();
 
-    //auto beforeAoScopy = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for
     for(unsigned i = 0; i < nBodies; i++)
     {
-      ((float4*)h_AoS_4)[i] = make_float4(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz, h_AoS_8[i].m);
+      ((float4*)h_AoS_4)[i] = make_float4(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz, this->G * h_SoA.m[i]);
     }
-    // auto afterAoScopy = std::chrono::high_resolution_clock::now();
-    // std::cout << "AoS copy duration: " << std::chrono::duration<float, std::milli>(afterAoScopy - beforeAoScopy).count() << " ms\n";
 
     //copy body data on device
     cudaMemcpy(d_AoS, h_AoS_4, nBodies * sizeof(float4), cudaMemcpyHostToDevice);
@@ -156,7 +151,7 @@ void SimulationNBodyHetero::computeBodiesAcceleration()
       cuda::computeBodiesAccellHetero_k<<<numBlocks, THREADS_PER_BLK>>>((float4*)d_AoS, (float3*)d_acc, nBodies);
     }
     // Do CPU work
-    computeEpilogueMipp();
+    computeCpuBlock();
 
     // auto afterCpuEpilogue = std::chrono::high_resolution_clock::now();
 

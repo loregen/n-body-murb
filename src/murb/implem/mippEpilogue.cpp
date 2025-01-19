@@ -1,7 +1,7 @@
 #include "SimulationNBodyHetero.cuh"
 #include "mipp.h"
 
-void SimulationNBodyHetero::computeEpilogueMipp()
+void SimulationNBodyHetero::computeCpuBlock()
 {
   unsigned iStart = nBodiesGpu;
   unsigned nBodies = this->getBodies().getN();

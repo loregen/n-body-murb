@@ -41,7 +41,7 @@ namespace cuda
     }
   }
 
-  __global__ void computeBodiesAccellAoS_k(float4 *d_AoS, float3 *d_acc, const unsigned long nBodies, const float softSquared, const float G)
+  __global__ void computeBodiesAccellAoS_k(float4 *d_AoS, float3 *d_acc, const unsigned long nBodies, const float softSquared)
   {
     __shared__ float4 shared_mem[THREADS_PER_BLK];
 
@@ -60,14 +60,15 @@ namespace cuda
       tileIdx = tile * THREADS_PER_BLK + threadIdx.x;
       shared_mem[threadIdx.x] = d_AoS[tileIdx];
       __syncthreads();
-      #pragma unroll 4
+      #pragma unroll 16
       for(unsigned jBody = 0; jBody < THREADS_PER_BLK; jBody++)
       {
         float4 otherBody = shared_mem[jBody];
         float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
         float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
 
-        float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+        //float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+        float ai = otherBody.w / (rijSquared * sqrtf(rijSquared));
 
         acc.x += ai * rij.x;
         acc.y += ai * rij.y;
@@ -88,7 +89,8 @@ namespace cuda
       float3 rij = {otherBody.x - myBody.x, otherBody.y - myBody.y, otherBody.z - myBody.z};
       float rijSquared = rij.x * rij.x + rij.y * rij.y + rij.z * rij.z + softSquared;
 
-      float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+      //float ai = G * otherBody.w / (rijSquared * sqrtf(rijSquared));
+      float ai = otherBody.w / (rijSquared * sqrtf(rijSquared));
 
       acc.x += ai * rij.x;
       acc.y += ai * rij.y;
@@ -141,13 +143,14 @@ void SimulationNBodyCudaAoS::computeBodiesAcceleration()
     #pragma omp parallel for 
     for(unsigned long i = 0; i < n; i++)
     {
-      ((float4*)h_AoS_4)[i] = make_float4(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz, h_AoS_8[i].m);
+      ((float4*)h_AoS_4)[i] = make_float4(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz, this->G * h_AoS_8[i].m);
+      //*((float3*)(&((float4*)h_AoS_4)[i])) = make_float3(h_AoS_8[i].qx, h_AoS_8[i].qy, h_AoS_8[i].qz);
     }
 
     //copy body data on device
     cudaMemcpy(d_AoS, h_AoS_4, n * sizeof(float4), cudaMemcpyHostToDevice);
 
-    cuda::computeBodiesAccellAoS_k<<<numBlocks, THREADS_PER_BLK>>>((float4*)d_AoS, (float3*)d_acc, n, this->soft * this->soft, this->G);
+    cuda::computeBodiesAccellAoS_k<<<numBlocks, THREADS_PER_BLK>>>((float4*)d_AoS, (float3*)d_acc, n, this->soft * this->soft);
 
     //copy back the result
     cudaMemcpy(this->accelerations.data(), d_acc, n * sizeof(float3), cudaMemcpyDeviceToHost);

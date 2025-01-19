@@ -28,7 +28,7 @@ class SimulationNBodyHetero : public SimulationNBodyInterface {
   protected:
     void initIteration();
     void computeBodiesAcceleration();
-    void computeEpilogueMipp();
+    void computeCpuBlock();
 };
 
 #endif /* SIMULATION_N_BODY_HETERO_CUH */

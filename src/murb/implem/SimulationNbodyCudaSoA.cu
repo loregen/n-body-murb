@@ -62,10 +62,11 @@ namespace cuda
     //shared_mem[threadIdx.x] = (tileIdx < nBodies) ? make_float4(d_x[tileIdx], d_y[tileIdx], d_z[tileIdx], d_mass[tileIdx]) : make_float4(0.f, 0.f, 0.f, 0.f);
     if(tileIdx < nBodies)
     {
-      shared_mem[threadIdx.x].x = d_x[tileIdx];
-      shared_mem[threadIdx.x].y = d_y[tileIdx];
-      shared_mem[threadIdx.x].z = d_z[tileIdx];
-      shared_mem[threadIdx.x].w = d_mass[tileIdx];
+      // shared_mem[threadIdx.x].x = d_x[tileIdx];
+      // shared_mem[threadIdx.x].y = d_y[tileIdx];
+      // shared_mem[threadIdx.x].z = d_z[tileIdx];
+      // shared_mem[threadIdx.x].w = d_mass[tileIdx];
+      shared_mem[threadIdx.x] = make_float4(d_x[tileIdx], d_y[tileIdx], d_z[tileIdx], d_mass[tileIdx]);
     }
     else
     {
